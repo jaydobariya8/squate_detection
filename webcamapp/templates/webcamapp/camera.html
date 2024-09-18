@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera View</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #000;
+            overflow: hidden;
+            position: relative;
+        }
+        #video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 0;
+        }
+        .blink {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.5);
+            animation: blink-animation 0.1s step-start infinite;
+            z-index: 1;
+        }
+        #countdown {
+            position: absolute;
+            top: 30x; 
+            left: 49%; 
+            font-size: 50px;
+            color: white;
+            z-index: 1;
+        }
+        .horizontal-line {
+            position: absolute;
+            top: 50%;
+            left: 0;
+            width: 100%;
+            height: 2px; 
+            background-color: black;
+            transform: translateY(-50%); 
+        }
+
+        /* Vertical Line */
+        .vertical-line {
+            position: absolute;
+            left: 50%;
+            top: 0;
+            width: 2px; /* Thickness of the line */
+            height: 100%;
+            background-color: black;
+            transform: translateX(-50%); /* Ensures it's perfectly centered */
+        }
+        @keyframes blink-animation {
+            50% { opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <video id="video" autoplay></video>
+    <div id="countdown"></div>
+    <div class="horizontal-line"></div>
+    <div class="vertical-line"></div>
+    <script>
+        const video = document.getElementById('video');
+        let captureCount = 0;
+        const maxCaptures = 5;
+        const captureInterval = 4000; // 4 seconds
+
+        function startCapturing() {
+            navigator.mediaDevices.getUserMedia({ video: true }).then(function(stream) {
+                video.srcObject = stream;
+                startCountdown();
+                function startCountdown() {
+                    const countdownElement = document.getElementById('countdown');
+                    let count = 4;
+                    let repetitions = 5;
+                    let intervalId;
+                
+                    function updateCountdown() {
+                        countdownElement.textContent = count;
+                        count--;
+                
+                        if (count < 1) {
+                            count = 4;
+                            repetitions--;
+                
+                            if (repetitions <= 0) {
+                                clearInterval(intervalId);
+                                return;
+                            }
+                        }
+                    }
+                
+                    intervalId = setInterval(updateCountdown, 1000); // Update every second
+                }
+
+                function capturePhoto() {
+                    const canvas = document.createElement('canvas');
+                    const cropWidth = 300;  // Desired width of the crop
+                    const cropHeight = 500;  // Desired height of the crop
+                
+                    // Set canvas size to the crop size
+                    canvas.width = cropWidth;
+                    canvas.height = cropHeight;
+                
+                    const ctx = canvas.getContext('2d');
+                
+                    // Calculate the x and y starting points to crop the middle of the video
+                    const xOffset = (video.videoWidth - cropWidth) / 2;
+                    const yOffset = (video.videoHeight - cropHeight) / 2;
+                
+                    // Draw only the cropped part of the video onto the canvas
+                    ctx.drawImage(video, xOffset, yOffset, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+                
+                    canvas.toBlob((blob) => {
+                        const formData = new FormData();
+                        formData.append('image', blob);
+                
+                        fetch('/save-image/', {
+                            method: 'POST',
+                            body: formData
+                        }).then(response => response.text())
+                          .then(result => console.log('Image saved'))
+                          .catch(error => console.error('Error:', error));
+                    }, 'image/jpeg');
+                }
+
+                
+                function showBlinkEffect() {
+                    const blink = document.createElement('div');
+                    blink.className = 'blink';
+                    document.body.appendChild(blink);
+                    setTimeout(() => {
+                        document.body.removeChild(blink);
+                    }, 100);
+                }
+
+                function updateCapturing() {
+                    if (captureCount < maxCaptures) {
+                        capturePhoto();
+                        showBlinkEffect();
+                        captureCount++;
+                    } else {
+                        stopCapturing();
+                    }
+                }
+
+                // Capture photo and show blink effect every 3 seconds
+                setInterval(updateCapturing, captureInterval);
+            }).catch(err => {
+                console.error('Error accessing webcam:', err);
+            });
+        }
+
+        function stopCapturing() {
+            const stream = video.srcObject;
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+            video.srcObject = null;
+            window.location.href = '/';
+        }
+
+        window.onload = startCapturing;
+    </script>
+</body>
+</html>
